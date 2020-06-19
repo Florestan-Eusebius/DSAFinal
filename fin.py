@@ -1,7 +1,6 @@
 import json
 import matplotlib.pyplot as plt
 import numpy as np
-from brokenaxes import brokenaxes
 
 class Film:
     """
@@ -11,7 +10,7 @@ class Film:
     def __init__(self, item):
         self.id = item['_id']['$oid']
         self.title = item['title']
-        self.year = item['year']
+        self.year = int(item['year'])
         self.type = item['type'].split(',')
         self.star = float(item['star'])
 
@@ -70,6 +69,7 @@ class Graph:
         for item in data:
             self.addFromItem(item)
         self.set_cnct_comp()
+        self.bfs_reset()
 
     def addVertex(self, actor):
         """ 向图中添加姓名为actor的演员, 并返回演员节点 """
@@ -134,7 +134,7 @@ class Graph:
         return distance
 
     def set_cnct_comp(self):
-        """ 为连通分支这一成员变量正确赋值 """
+        """ 为连通分支这一成员变量正确赋值, 并按连通分支规模排序 """
         for key in self.vertlist:  # 遍历图中的节点
             vert = self.vertlist[key]
             if vert.colour == 0:  # 如果为搜索过, 以该节点为起点bfs, 并将所有搜索的节点存入d, 将d存入self.cnct_comp
@@ -171,7 +171,7 @@ class Graph:
                 R = r
         return R
 
-    def films_in_cont(self, index):
+    def films_in_cnct(self, index):
         """ 以字典的形式(Film.id: Film)返回第index个连通分支内的所有电影 """
         d = self.cnct_comp[index]
         films = {}
@@ -236,23 +236,23 @@ if __name__ == "__main__":
     Problem 1,2
     """
     output.write('### 连通分支\n')
-    L = G.cnct_comp
-    numBranch = len(L)
-    output.write('共%d个连通分支.\n' % numBranch)
-    NumList = []
-    diameterList = []
-    StarList = []
+    L = G.cnct_comp # 按规模排好序的所有连通分支的列表
+    numComp = len(L) # 连通分支个数
+    output.write('共%d个连通分支.\n' % numComp)
+    scale_list = [] # 储存连通分支规模的列表
+    diameter_list = [] # 储存连通分支直径的列表
+    star_list = [] # 储存连通分支平均星级的列表
     output.write('|序号|演员个数|电影类别|直径|\n')
     output.write('|---|-----|----|---|\n')
     for i in range(20):
-        Num = len(L[i])
-        NumList.append(Num)
-        diameter = 0
+        scale = len(L[i])
+        scale_list.append(scale)
+        diameter = -1
         if i >= 1:
             diameter = G.diameter(i)
-        diameterList.append(diameter)
-        films = G.films_in_cont(i)
-        StarList.append(np.mean([f.star for f in films.values()]))
+        diameter_list.append(diameter)
+        films = G.films_in_cnct(i)
+        star_list.append(np.mean([f.star for f in films.values()]))
         type = {}
         for f in films.values():
             for t in f.type:
@@ -265,19 +265,20 @@ if __name__ == "__main__":
             Type = [types[i][0] for i in range(3)]
         else:
             Type = [t[0] for t in types]
-        output.write('|'+str(i+1)+'|'+str(Num)+'|' +
+        output.write('|'+str(i+1)+'|'+str(scale)+'|' +
                      list2str(Type)+'|'+str(diameter)+'|\n')
+    # 画表格中的省略号栏, 并添加一个0以在作图时分隔前/后20
     output.write('|...|...|...|...|\n')
-    NumList.append(0)
-    diameterList.append(0)
-    StarList.append(0)
-    for i in range(numBranch-20, numBranch):
-        Num = len(L[i])
-        NumList.append(Num)
+    scale_list.append(0)
+    diameter_list.append(0)
+    star_list.append(0)
+    for i in range(numComp-20, numComp):
+        scale = len(L[i])
+        scale_list.append(scale)
         diameter = G.diameter(i)
-        diameterList.append(diameter)
-        films = G.films_in_cont(i)
-        StarList.append(np.mean([f.star for f in films.values()]))
+        diameter_list.append(diameter)
+        films = G.films_in_cnct(i)
+        star_list.append(np.mean([f.star for f in films.values()]))
         type = {}
         for f in films.values():
             for t in f.type:
@@ -290,7 +291,7 @@ if __name__ == "__main__":
             Type = [types[i][0] for i in range(3)]
         else:
             Type = [t[0] for t in types]
-        output.write('|'+str(i+1)+'|'+str(Num)+'|' +
+        output.write('|'+str(i+1)+'|'+str(scale)+'|' +
                      list2str(Type)+'|'+str(diameter)+'|\n')
     """
     Problem 3
@@ -299,11 +300,11 @@ if __name__ == "__main__":
 
     fig, ax = plt.subplots(4, gridspec_kw={'height_ratios':[2,5,7,7]}, sharex=True, figsize=(10, 10))
     plt.xticks(rotation=45)
-    index = list(range(1,21))+['']+list(range(numBranch-19, numBranch+1))
+    index = list(range(1,21))+['']+list(range(numComp-19, numComp+1))
     x = np.arange(len(index))
-    N = np.array(NumList)
-    R = np.array(diameterList)
-    S = np.array(StarList)
+    N = np.array(scale_list)
+    R = np.array(diameter_list)
+    S = np.array(star_list)
     ax[0].bar(x, N)
     ax[1].bar(x, N)
     ax[0].set_ylim(84680,84700)
@@ -323,6 +324,7 @@ if __name__ == "__main__":
     ax[0].set_title('Scales of the first and last 20 connected components')
     ax[2].set_title('Diameters of the first and last 20 connected components')
     ax[3].set_title('Average stars of the first and last 20 connected components')
+    ax[3].set_xlabel('Index of connected component')
     fig.savefig('2.png')
     output.write('@import "2.png"\n')
 
@@ -356,49 +358,39 @@ if __name__ == "__main__":
     output.write('周星驰和他的共同出演者共演出了%d部电影, 所出演电影的平均星级为%.2f, 电影所属类别前三名为' % (
         number, star)+list2str([types[i][0] for i in range(3)])+'.\n')
     """ ========================================================= """
-    # print('下面列出周星驰和共同出演者所演电影的统计信息')
-    # table = "{0:10}\t{1:^10}\t{2:10}\t{3:20}"
-    # coactors.append(zhou)
-    # print(table.format('演员姓名', '电影数目', '平均星级', '类型'))
-    # for actor in coactors:
-    #     name = actor.actor
-    #     films = actor.films
-    #     num_of_film = len(films)
-    #     star_of_film = np.mean([f.star for f in films])
-    #     type = {}
-    #     for f in films:
-    #         for t in f.type:
-    #             if t in type:
-    #                 type[t] += 1
-    #             else:
-    #                 type[t] = 1
-    #     types = sorted(type.items(), key=lambda dict: dict[1], reverse=True)
-    #     if len(types) >= 3:
-    #         Type = [types[i][0] for i in range(3)]
-    #     else:
-    #         Type = [t[0] for t in types]
-    #     print(table.format(name, num_of_film, '%.2f' % star_of_film, str(Type)))
-    # print('### 探究出演电影数与出演电影平均星级的关系')
-    # D={}
-    # for actor in G.vertlist:
-    #     films=G.vertlist[actor].films
-    #     # coactors=G.vertlist[actor].getConnections()
-    #     # n=len(coactors)
-    #     n=0
-    #     if actor!='':
-    #         n=len(films)
-    #     if n>250:
-    #         print(actor)
-    #     star=np.mean([f.star for f in films.values()])
-    #     if n in D:
-    #         D[n].append(star)
-    #     else:
-    #         D[n]=[star]
-    # for n in D:
-    #     D[n]=np.mean(D[n])
-    # D=sorted(D.items(), key=lambda dict: dict[0])
-    # x=[item[0] for item in D]
-    # y=[item[1] for item in D]
-    # plt.plot(x,y,'.')
-    # plt.show()
+
+    print('### 探究合作人数与平均星级的关系')
+    S={}
+    Y={}
+    for actor in G.vertlist:
+        films=G.vertlist[actor].films
+        coactors=G.vertlist[actor].getConnections()
+        n=len(coactors)
+        star=np.mean([f.star for f in films.values()])
+        year=np.mean([f.year for f in films.values()])
+        if n in S:
+            S[n].append(star)
+        else:
+            S[n]=[star]
+    for n in S:
+        S[n]=np.mean(S[n])
+    SS=sorted(S.items(), key=lambda dict: dict[0])
+    x=[item[0] for item in SS]
+    y=[item[1] for item in SS]
+    # 每50个分片统计
+    X=[25+n*50 for n in range(18)]
+    z=[]
+    for xx in X:
+        st=[]
+        for n in range(xx-25,xx+25):
+            if n in S:
+                st.append(S[n])
+        z.append(np.mean(st))
+    fig, ax=plt.subplots(2,sharex=True)
+    ax[0].plot(x,y,'.')
+    ax[1].plot(X,z)
+    ax[1].set_xlabel('Number of coactors')
+    ax[0].set_ylabel('Average Stars')
+    ax[1].set_ylabel('Average Stars')
+    fig.savefig('more.png')
     
